@@ -1,0 +1,20 @@
+name: ws-tts
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      # Training stack
+      - TTS==0.22.0
+      - torch
+      - torchaudio
+      - accelerate
+      # Dataset + audio decode
+      - datasets
+      - soundfile
+      - numpy
+      # Export tooling
+      - onnx
+      - onnxruntime
+

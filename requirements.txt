@@ -1,0 +1,11 @@
+# If you prefer venv/pip instead of conda.
+TTS==0.22.0
+torch
+torchaudio
+accelerate
+datasets
+soundfile
+numpy
+onnx
+onnxruntime
+

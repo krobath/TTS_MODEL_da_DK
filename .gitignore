@@ -1,0 +1,29 @@
+# Local datasets and caches (large)
+hf-cache/
+datasets/
+work/
+runs/
+output/
+tts-training/
+tts-voices/
+
+# Hugging Face cache (if you use the default in your home dir by mistake)
+.cache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Model artifacts (large)
+*.pth
+*.pt
+*.onnx
+*.mlmodel
+*.mlpackage
+*.tflite
+
+# macOS
+.DS_Store
+
