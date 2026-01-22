@@ -33,8 +33,8 @@ python "${ROOT_DIR}/scripts/generate_coqui_vits_config_ws_pua.py" \
   --out-dir "${OUT_DIR}" \
   --run-name "${RUN_NAME}" \
   --epochs 500 \
-  --batch-size 16
+  --batch-size 16 \
+  ${WS_DISABLE_EVAL:+--disable-eval}
 
 echo "== (4) Train =="
 WS_TTS_DIAG=1 "${ROOT_DIR}/scripts/train_da_coral_ws_pua_vits.sh" "${OUT_DIR}/config.json" --use_accelerate true
-

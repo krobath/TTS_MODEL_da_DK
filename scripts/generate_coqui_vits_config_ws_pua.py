@@ -54,6 +54,11 @@ def main() -> None:
     ap.add_argument("--epochs", type=int, default=500)
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--eval-batch-size", type=int, default=4)
+    ap.add_argument(
+        "--disable-eval",
+        action="store_true",
+        help="Disable Coqui evaluation during training (workaround for occasional MPS/Accelerate eval crashes).",
+    )
     ap.add_argument("--mixed-precision", action="store_true")
     ap.add_argument("--num-loader-workers", type=int, default=0)
     ap.add_argument("--num-eval-loader-workers", type=int, default=0)
@@ -92,6 +97,14 @@ def main() -> None:
     cfg["use_language_embedding"] = False
     cfg["model_args"]["use_language_embedding"] = False
     cfg["language_ids_file"] = ""
+
+    # Evaluation: On Apple Silicon with MPS + HF Accelerate we have seen intermittent failures
+    # during the eval loop (runtime: "Placeholder storage has not been allocated on MPS device!").
+    # Disabling eval keeps long training runs alive; we can still export checkpoints and listen
+    # to samples periodically.
+    if bool(args.disable_eval):
+        cfg["run_eval"] = False
+        cfg["print_eval"] = False
 
     cfg["audio"]["sample_rate"] = int(args.sample_rate)
     cfg["audio"]["resample"] = False
@@ -150,4 +163,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

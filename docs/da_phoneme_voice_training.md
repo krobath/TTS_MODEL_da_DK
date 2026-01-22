@@ -98,6 +98,12 @@ Stability note (Apple Silicon): we explicitly disable Coqui “language embeddin
 config because our model is single-language, and the language-embedding code path has caused
 crashes when experimenting with MPS/Accelerate.
 
+Evaluation note (Apple Silicon): some environments still show intermittent MPS/Accelerate crashes
+during the eval loop (error: `Placeholder storage has not been allocated on MPS device!`).
+If you hit this, disable evaluation for the run:
+- when generating config: add `--disable-eval`
+- when using the convenience runner: set `WS_DISABLE_EVAL=1`
+
 Diagnostics: to see what PyTorch thinks is available (CPU vs MPS), run `scripts/ws_tts_diag.py`
 inside your training environment, or set `WS_TTS_DIAG=1` when running the training wrapper.
 
