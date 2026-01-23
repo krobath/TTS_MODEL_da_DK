@@ -25,6 +25,9 @@ LIMIT="0"
 CACHE_DIR="hf-cache"
 MIN_FRAMES_PER_CHAR="1.0"
 HOP_LENGTH="256"
+MIN_AUDIO_SEC="1.5"
+MAX_AUDIO_SEC="20.0"
+MAX_TEXT_LEN="120"
 
 usage() {
   cat <<'EOF'
@@ -49,6 +52,9 @@ while [[ $# -gt 0 ]]; do
     --resample) RESAMPLE="${2:-}"; shift 2 ;;
     --limit) LIMIT="${2:-}"; shift 2 ;;
     --cache-dir) CACHE_DIR="${2:-}"; shift 2 ;;
+    --min-audio-sec) MIN_AUDIO_SEC="${2:-}"; shift 2 ;;
+    --max-audio-sec) MAX_AUDIO_SEC="${2:-}"; shift 2 ;;
+    --max-text-len) MAX_TEXT_LEN="${2:-}"; shift 2 ;;
     --min-frames-per-char) MIN_FRAMES_PER_CHAR="${2:-}"; shift 2 ;;
     --hop-length) HOP_LENGTH="${2:-}"; shift 2 ;;
     *) echo "Unknown arg: $1" >&2; usage >&2; exit 2 ;;
@@ -64,6 +70,7 @@ fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 args=( "--out" "${OUT}" "--g2p-dir" "${ROOT_DIR}/g2p-models/da-DK" "--resample" "${RESAMPLE}" "--limit" "${LIMIT}" )
+args+=( "--min-audio-sec" "${MIN_AUDIO_SEC}" "--max-audio-sec" "${MAX_AUDIO_SEC}" "--max-text-len" "${MAX_TEXT_LEN}" )
 args+=( "--min-frames-per-char" "${MIN_FRAMES_PER_CHAR}" "--hop-length" "${HOP_LENGTH}" )
 if [[ -n "${SPEAKER}" ]]; then
   args+=( "--speaker" "${SPEAKER}" )

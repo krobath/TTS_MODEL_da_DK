@@ -65,7 +65,7 @@ def main() -> None:
         "--max-text-len",
         type=int,
         default=120,
-        help="Max text length (characters) to keep. For PUA text, this bounds alignment complexity and prevents NaNs.",
+        help="Max text length (characters) to keep (only used if Coqui filters are enabled).",
     )
     ap.add_argument(
         "--min-text-len",
@@ -84,6 +84,14 @@ def main() -> None:
     ap.add_argument("--mixed-precision", action="store_true")
     ap.add_argument("--num-loader-workers", type=int, default=0)
     ap.add_argument("--num-eval-loader-workers", type=int, default=0)
+    ap.add_argument(
+        "--enable-coqui-filters",
+        action="store_true",
+        help=(
+            "Enable Coqui internal length-based discarding using --min/max-audio-sec and --min/max-text-len. "
+            "Default is disabled because discarding inside Coqui can cause sampler/index mismatches on MPS/Accelerate."
+        ),
+    )
     args = ap.parse_args()
 
     dataset = Path(args.dataset).expanduser().resolve()
@@ -131,10 +139,19 @@ def main() -> None:
     cfg["audio"]["sample_rate"] = int(args.sample_rate)
     cfg["audio"]["resample"] = False
 
-    cfg["min_audio_len"] = int(max(0.0, float(args.min_audio_sec)) * args.sample_rate)
-    cfg["max_audio_len"] = int(max(1.0, float(args.max_audio_sec)) * args.sample_rate)
-    cfg["min_text_len"] = int(args.min_text_len)
-    cfg["max_text_len"] = int(args.max_text_len)
+    # Coqui can discard samples at DataLoader construction time based on these limits.
+    # On some MPS/Accelerate setups we have observed `IndexError: list index out of range` caused by
+    # sampler/index mismatches after that discard step. Prefer dataset-side filtering instead.
+    if bool(args.enable_coqui_filters):
+        cfg["min_audio_len"] = int(max(0.0, float(args.min_audio_sec)) * args.sample_rate)
+        cfg["max_audio_len"] = int(max(1.0, float(args.max_audio_sec)) * args.sample_rate)
+        cfg["min_text_len"] = int(args.min_text_len)
+        cfg["max_text_len"] = int(args.max_text_len)
+    else:
+        cfg["min_audio_len"] = 0
+        cfg["max_audio_len"] = 10**9
+        cfg["min_text_len"] = 1
+        cfg["max_text_len"] = 10**6
 
     cfg["sort_by_audio_len"] = True
     cfg["batch_group_size"] = 16

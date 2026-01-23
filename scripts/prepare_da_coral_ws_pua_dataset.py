@@ -284,6 +284,24 @@ def main() -> None:
     ap.add_argument("--resample", type=int, default=0, help="Optional target sample rate (e.g. 22050). 0 = keep original.")
     ap.add_argument("--cache-dir", default=None, help="Optional HF datasets cache dir")
     ap.add_argument(
+        "--min-audio-sec",
+        type=float,
+        default=1.5,
+        help="Drop samples shorter than this (seconds). Helps avoid VITS alignment instability.",
+    )
+    ap.add_argument(
+        "--max-audio-sec",
+        type=float,
+        default=20.0,
+        help="Drop samples longer than this (seconds). Keeps batches tighter and helps stability.",
+    )
+    ap.add_argument(
+        "--max-text-len",
+        type=int,
+        default=120,
+        help="Drop samples where PUA text length exceeds this. Prevents extreme alignment cases.",
+    )
+    ap.add_argument(
         "--min-frames-per-char",
         type=float,
         default=1.0,
@@ -351,6 +369,8 @@ def main() -> None:
     seen = 0
     kept = 0
     skipped_short_for_text = 0
+    skipped_audio_len = 0
+    skipped_text_len = 0
 
     for row in split:
         seen += 1
@@ -365,6 +385,21 @@ def main() -> None:
 
         text = str(row["text"])
         pua_text = text_to_pua(text, g2p=g2p, base=args.pua_base, cache=word_cache)
+
+        # Dataset-side filters:
+        # We do these here so Coqui doesn't have to discard samples at DataLoader construction time
+        # (which has caused sampler/index mismatches in some MPS/Accelerate setups).
+        dur_sec = float(len(arr)) / float(sr)
+        if args.min_audio_sec and dur_sec < float(args.min_audio_sec):
+            skipped_audio_len += 1
+            continue
+        if args.max_audio_sec and dur_sec > float(args.max_audio_sec):
+            skipped_audio_len += 1
+            continue
+
+        if args.max_text_len and len(pua_text) > int(args.max_text_len):
+            skipped_text_len += 1
+            continue
 
         # Alignment safety filter:
         # VITS monotonic alignment (MAS) can crash if text is much longer than the available frames.
@@ -419,6 +454,8 @@ def main() -> None:
         "seen": seen,
         "kept": kept,
         "skippedShortForText": skipped_short_for_text,
+        "skippedAudioLen": skipped_audio_len,
+        "skippedTextLen": skipped_text_len,
         "out": str(out_root),
         "sampleRate": args.resample if args.resample else "source",
         "g2p": {
@@ -430,7 +467,13 @@ def main() -> None:
             "max_word_len": vocab.max_word_len,
         },
         "puaBase": int(args.pua_base),
-        "filter": {"minFramesPerChar": float(args.min_frames_per_char), "hopLength": int(args.hop_length)},
+        "filter": {
+            "minAudioSec": float(args.min_audio_sec),
+            "maxAudioSec": float(args.max_audio_sec),
+            "maxTextLen": int(args.max_text_len),
+            "minFramesPerChar": float(args.min_frames_per_char),
+            "hopLength": int(args.hop_length),
+        },
     }
     (out_root / "stats.json").write_text(json.dumps(stats, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -439,6 +482,8 @@ def main() -> None:
     print(f"speakers={speakers}")
     print(f"kept={kept} (speaker={args.speaker or 'ALL'})")
     print(f"skippedShortForText={skipped_short_for_text} minFramesPerChar={args.min_frames_per_char}")
+    print(f"skippedAudioLen={skipped_audio_len} (minAudioSec={args.min_audio_sec} maxAudioSec={args.max_audio_sec})")
+    print(f"skippedTextLen={skipped_text_len} (maxTextLen={args.max_text_len})")
     print(f"wavs={wav_dir} metadata={out_root / 'metadata.csv'}")
     print(f"ws_voicepack={out_root / 'ws_voicepack.json'}")
 

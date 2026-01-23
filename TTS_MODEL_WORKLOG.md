@@ -353,11 +353,34 @@ Fix / mitigation:
 - Filter at dataset prep time:
   - `scripts/prepare_da_coral_ws_pua_dataset.sh` now supports `--min-frames-per-char`
     (default `1.0`), using an approximation `frames ≈ len(audio)/hop_length` with hop 256.
+  - It also supports:
+    - `--min-audio-sec` (default 1.5)
+    - `--max-audio-sec` (default 20.0)
+    - `--max-text-len` (default 120)
 - Filter at training time:
   - `scripts/generate_coqui_vits_config_ws_pua.py` now defaults to:
     - `--min-audio-sec 1.5`
     - `--max-text-len 120`
   - Both can be overridden if needed once training is stable.
+
+### 6.4 Coqui DataLoader `IndexError: list index out of range` (MPS/Accelerate)
+
+Symptoms:
+
+- Crash during training DataLoader iteration
+- Stack trace ends in `TTS/tts/models/vits.py` `__getitem__` repeatedly calling itself and then:
+  `IndexError: list index out of range`
+
+Likely cause:
+
+- Coqui discards samples at DataLoader construction time based on `min_audio_len/max_audio_len`
+  and `min_text_len/max_text_len`.
+- On some MPS/Accelerate runs this appears to cause sampler/index mismatches after discarding.
+
+Fix:
+
+- We now **disable Coqui internal discarding by default** and rely on dataset-side filtering.
+  - `scripts/generate_coqui_vits_config_ws_pua.py` sets very wide limits unless you pass `--enable-coqui-filters`.
 
 If you still see NaNs after this filtering:
 

@@ -109,6 +109,9 @@ and/or a `maximum_path` index error, it usually means a batch contained **audio 
 for the corresponding (PUA) text length. To mitigate:
 - dataset prep supports `--min-frames-per-char` (default 1.0) to filter such samples
 - config generation caps `--max-text-len` and enforces `--min-audio-sec`
+Also, Coqui's own length-based discarding can trigger sampler/index mismatches on MPS/Accelerate
+in some environments. By default, config generation disables Coqui discarding and relies on the
+dataset-side filtering instead (you can override with `--enable-coqui-filters`).
 
 Diagnostics: to see what PyTorch thinks is available (CPU vs MPS), run `scripts/ws_tts_diag.py`
 inside your training environment, or set `WS_TTS_DIAG=1` when running the training wrapper.
