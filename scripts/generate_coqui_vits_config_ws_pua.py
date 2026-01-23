@@ -49,8 +49,30 @@ def main() -> None:
     )
     ap.add_argument("--language", default="da", help="Language code for dataset entry (e.g. da)")
     ap.add_argument("--sample-rate", type=int, default=22050)
-    ap.add_argument("--max-audio-sec", type=float, default=20.0)
-    ap.add_argument("--min-audio-sec", type=float, default=0.0)
+    ap.add_argument(
+        "--max-audio-sec",
+        type=float,
+        default=20.0,
+        help="Max audio duration (seconds) to keep. Larger keeps longer utterances but may reduce stability.",
+    )
+    ap.add_argument(
+        "--min-audio-sec",
+        type=float,
+        default=1.5,
+        help="Min audio duration (seconds) to keep. Prevents too-short audio that can break VITS alignment.",
+    )
+    ap.add_argument(
+        "--max-text-len",
+        type=int,
+        default=120,
+        help="Max text length (characters) to keep. For PUA text, this bounds alignment complexity and prevents NaNs.",
+    )
+    ap.add_argument(
+        "--min-text-len",
+        type=int,
+        default=1,
+        help="Min text length (characters) to keep.",
+    )
     ap.add_argument("--epochs", type=int, default=500)
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--eval-batch-size", type=int, default=4)
@@ -111,6 +133,8 @@ def main() -> None:
 
     cfg["min_audio_len"] = int(max(0.0, float(args.min_audio_sec)) * args.sample_rate)
     cfg["max_audio_len"] = int(max(1.0, float(args.max_audio_sec)) * args.sample_rate)
+    cfg["min_text_len"] = int(args.min_text_len)
+    cfg["max_text_len"] = int(args.max_text_len)
 
     cfg["sort_by_audio_len"] = True
     cfg["batch_group_size"] = 16

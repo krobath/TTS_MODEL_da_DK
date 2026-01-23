@@ -47,6 +47,7 @@ except Exception as e:  # pragma: no cover
 
 
 PUA_DEFAULT_BASE = 0xE000
+DEFAULT_HOP_LENGTH = 256
 
 
 def nfc(s: str) -> str:
@@ -282,6 +283,22 @@ def main() -> None:
     ap.add_argument("--pua-base", type=lambda s: int(s, 0), default=PUA_DEFAULT_BASE, help="Base scalar (e.g. 0xE000)")
     ap.add_argument("--resample", type=int, default=0, help="Optional target sample rate (e.g. 22050). 0 = keep original.")
     ap.add_argument("--cache-dir", default=None, help="Optional HF datasets cache dir")
+    ap.add_argument(
+        "--min-frames-per-char",
+        type=float,
+        default=1.0,
+        help=(
+            "Filter out samples where audio is too short for the PUA text length. "
+            "We approximate mel frames as len(audio)/hop_length and require frames >= text_len * ratio. "
+            "This prevents VITS alignment failures (NaNs / maximum_path crashes)."
+        ),
+    )
+    ap.add_argument(
+        "--hop-length",
+        type=int,
+        default=DEFAULT_HOP_LENGTH,
+        help="Hop length used for the above approximation (must match training config; default 256).",
+    )
     args = ap.parse_args()
 
     out_root = Path(args.out).expanduser().resolve()
@@ -333,6 +350,7 @@ def main() -> None:
     meta_lines: List[str] = []
     seen = 0
     kept = 0
+    skipped_short_for_text = 0
 
     for row in split:
         seen += 1
@@ -347,6 +365,20 @@ def main() -> None:
 
         text = str(row["text"])
         pua_text = text_to_pua(text, g2p=g2p, base=args.pua_base, cache=word_cache)
+
+        # Alignment safety filter:
+        # VITS monotonic alignment (MAS) can crash if text is much longer than the available frames.
+        # This happens most often for very short utterances with long text (which can produce NaNs
+        # in KL/duration losses and later a `maximum_path` index error).
+        if args.min_frames_per_char and float(args.min_frames_per_char) > 0.0:
+            text_len = len(pua_text)
+            if text_len > 0:
+                hop = max(1, int(args.hop_length))
+                frames = max(1, int(len(arr) // hop))
+                required = int(float(text_len) * float(args.min_frames_per_char))
+                if frames < required:
+                    skipped_short_for_text += 1
+                    continue
 
         # Use a stable ID/filename so we can re-run without producing duplicates.
         tid = int(row["transcription_id"])
@@ -386,6 +418,7 @@ def main() -> None:
         "speakerFilter": args.speaker,
         "seen": seen,
         "kept": kept,
+        "skippedShortForText": skipped_short_for_text,
         "out": str(out_root),
         "sampleRate": args.resample if args.resample else "source",
         "g2p": {
@@ -397,6 +430,7 @@ def main() -> None:
             "max_word_len": vocab.max_word_len,
         },
         "puaBase": int(args.pua_base),
+        "filter": {"minFramesPerChar": float(args.min_frames_per_char), "hopLength": int(args.hop_length)},
     }
     (out_root / "stats.json").write_text(json.dumps(stats, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -404,6 +438,7 @@ def main() -> None:
     print(f"out={out_root}")
     print(f"speakers={speakers}")
     print(f"kept={kept} (speaker={args.speaker or 'ALL'})")
+    print(f"skippedShortForText={skipped_short_for_text} minFramesPerChar={args.min_frames_per_char}")
     print(f"wavs={wav_dir} metadata={out_root / 'metadata.csv'}")
     print(f"ws_voicepack={out_root / 'ws_voicepack.json'}")
 

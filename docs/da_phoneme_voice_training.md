@@ -104,6 +104,12 @@ If you hit this, disable evaluation for the run:
 - when generating config: add `--disable-eval`
 - when using the convenience runner: set `WS_DISABLE_EVAL=1`
 
+Alignment stability note (VITS / MAS): if training crashes with NaNs in `loss_kl`/`loss_duration`
+and/or a `maximum_path` index error, it usually means a batch contained **audio that is too short**
+for the corresponding (PUA) text length. To mitigate:
+- dataset prep supports `--min-frames-per-char` (default 1.0) to filter such samples
+- config generation caps `--max-text-len` and enforces `--min-audio-sec`
+
 Diagnostics: to see what PyTorch thinks is available (CPU vs MPS), run `scripts/ws_tts_diag.py`
 inside your training environment, or set `WS_TTS_DIAG=1` when running the training wrapper.
 

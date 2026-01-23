@@ -23,6 +23,8 @@ LIMIT="0"
 
 # Default to a repo-local HF cache.
 CACHE_DIR="hf-cache"
+MIN_FRAMES_PER_CHAR="1.0"
+HOP_LENGTH="256"
 
 usage() {
   cat <<'EOF'
@@ -47,6 +49,8 @@ while [[ $# -gt 0 ]]; do
     --resample) RESAMPLE="${2:-}"; shift 2 ;;
     --limit) LIMIT="${2:-}"; shift 2 ;;
     --cache-dir) CACHE_DIR="${2:-}"; shift 2 ;;
+    --min-frames-per-char) MIN_FRAMES_PER_CHAR="${2:-}"; shift 2 ;;
+    --hop-length) HOP_LENGTH="${2:-}"; shift 2 ;;
     *) echo "Unknown arg: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
@@ -60,6 +64,7 @@ fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 args=( "--out" "${OUT}" "--g2p-dir" "${ROOT_DIR}/g2p-models/da-DK" "--resample" "${RESAMPLE}" "--limit" "${LIMIT}" )
+args+=( "--min-frames-per-char" "${MIN_FRAMES_PER_CHAR}" "--hop-length" "${HOP_LENGTH}" )
 if [[ -n "${SPEAKER}" ]]; then
   args+=( "--speaker" "${SPEAKER}" )
 fi
@@ -69,4 +74,3 @@ if [[ -n "${CACHE_DIR}" ]]; then
 fi
 
 python3 "${ROOT_DIR}/scripts/prepare_da_coral_ws_pua_dataset.py" "${args[@]}"
-

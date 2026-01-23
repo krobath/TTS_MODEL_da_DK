@@ -25,7 +25,7 @@ echo "== (1) Diagnostics =="
 python "${ROOT_DIR}/scripts/ws_tts_diag.py" || true
 
 echo "== (2) Prepare dataset (downloads CoRal on first run) =="
-"${ROOT_DIR}/scripts/prepare_da_coral_ws_pua_dataset.sh" --out "${DATASET_DIR}" --speaker mic --resample 22050
+"${ROOT_DIR}/scripts/prepare_da_coral_ws_pua_dataset.sh" --out "${DATASET_DIR}" --speaker mic --resample 22050 --min-frames-per-char "${WS_MIN_FRAMES_PER_CHAR:-1.0}"
 
 echo "== (3) Generate Coqui config =="
 python "${ROOT_DIR}/scripts/generate_coqui_vits_config_ws_pua.py" \
@@ -34,6 +34,9 @@ python "${ROOT_DIR}/scripts/generate_coqui_vits_config_ws_pua.py" \
   --run-name "${RUN_NAME}" \
   --epochs 500 \
   --batch-size 16 \
+  --min-audio-sec "${WS_MIN_AUDIO_SEC:-1.5}" \
+  --max-audio-sec "${WS_MAX_AUDIO_SEC:-20.0}" \
+  --max-text-len "${WS_MAX_TEXT_LEN:-120}" \
   ${WS_DISABLE_EVAL:+--disable-eval}
 
 echo "== (4) Train =="
