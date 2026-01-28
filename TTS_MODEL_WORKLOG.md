@@ -298,7 +298,19 @@ We evaluate quality primarily by:
 1. Find a checkpoint in your run folder (Coqui creates a run directory under `work/tts-training/.../RUNNAME-<timestamp>/`).
 2. Run export:
 
+Prereqs (in your `ws-tts` env):
+
+- `python -m pip install onnx onnxscript`
+
+Export command:
+
 `python scripts/export_coqui_vits_to_ws_voicepack.py --config work/tts-training/da/coral_mic_ws_pua/config.json --checkpoint PATH_TO_CHECKPOINT.pth --out-root work/tts-voices --pack-name vits-ws-da-coral-pua --language da --speaker-label coral_mic --ws-frontend ws_pua_phonemes_v1 --ws-pua-base 0xE000 --ws-g2p-language da-DK`
+
+Notes:
+
+- The export script uses `torch.onnx.export()` under the hood (via Coqui). Newer PyTorch versions require `onnxscript` to be installed, otherwise export fails.
+- Newer PyTorch versions may also default to the **torch.export/dynamo-based** ONNX exporter, which often fails for VITS due to data-dependent control flow inside spline transforms. Our export script forces the legacy tracer-based export path (and runs export on CPU) for robustness.
+- By default we do **not** copy the `.pth` checkpoint into the voice pack (it’s huge and not needed at runtime). If you want it included for reproducibility, pass `--include-checkpoint`.
 
 This will create:
 

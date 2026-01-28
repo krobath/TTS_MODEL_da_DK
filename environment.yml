@@ -16,5 +16,5 @@ dependencies:
       - numpy
       # Export tooling
       - onnx
+      - onnxscript
       - onnxruntime
-

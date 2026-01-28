@@ -4,7 +4,11 @@ Export a trained Coqui VITS checkpoint into a WordSuggestor voice pack folder co
 the sherpa-onnx offline TTS runtime.
 
 Dependencies:
-  python -m pip install TTS onnx
+  python -m pip install TTS onnx onnxscript
+
+Note:
+  Newer PyTorch versions require `onnxscript` during `torch.onnx.export()`. If it's missing,
+  Coqui's `vits.export_onnx()` will fail even if `onnx` itself is installed.
 """
 
 from __future__ import annotations
@@ -12,10 +16,13 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import os
+import inspect
 from pathlib import Path
 from typing import Any, Dict
 
 import onnx
+import torch
 from TTS.tts.configs.vits_config import VitsConfig
 from TTS.tts.models.vits import Vits
 
@@ -52,6 +59,11 @@ def main() -> None:
     ap.add_argument("--ws-frontend", default="", help="Optional WordSuggestor frontend id (e.g. ws_pua_phonemes_v1)")
     ap.add_argument("--ws-pua-base", default="", help="Optional puaBase (int or hex, e.g. 0xE000)")
     ap.add_argument("--ws-g2p-language", default="", help="Optional g2pLanguageCode (e.g. da-DK)")
+    ap.add_argument(
+        "--include-checkpoint",
+        action="store_true",
+        help="Also copy the training checkpoint into the voice pack (big; not needed for runtime).",
+    )
     args = ap.parse_args()
 
     config_path = Path(args.config).expanduser().resolve()
@@ -63,19 +75,59 @@ def main() -> None:
     if not ckpt_path.exists():
         raise SystemExit(f"Missing checkpoint: {ckpt_path}")
 
+    try:
+        import onnxscript  # noqa: F401
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            "Missing Python dependency: onnxscript\n"
+            "Install it in your active environment and retry:\n"
+            "  python -m pip install onnxscript\n"
+        ) from exc
+
     pack_outer = out_root / args.pack_name
     pack_inner = pack_outer / args.pack_name
     pack_inner.mkdir(parents=True, exist_ok=True)
 
     (pack_inner / "config.json").write_bytes(config_path.read_bytes())
-    (pack_inner / "model_file.pth").write_bytes(ckpt_path.read_bytes())
+    if args.include_checkpoint:
+        (pack_inner / "model_file.pth").write_bytes(ckpt_path.read_bytes())
 
     cfg = VitsConfig()
     cfg.load_json(str(config_path))
     vits = Vits.init_from_config(cfg)
     vits.load_checkpoint(cfg, str(ckpt_path))
     onnx_path = pack_inner / "model.onnx"
-    vits.export_onnx(output_path=str(onnx_path), verbose=False)
+
+    # Coqui calls into `torch.onnx.export()`. Newer PyTorch defaults to the dynamo/torch.export-based
+    # ONNX exporter, which often fails on VITS because it contains data-dependent control flow
+    # (e.g. `if torch.min(inputs) < left ...` in rational_quadratic_spline).
+    #
+    # We prefer the legacy tracer-based exporter here, which is sufficient for our runtime use.
+    os.environ.setdefault("TORCH_ONNX_USE_EXPERIMENTAL_EXPORTER", "0")
+    os.environ.setdefault("TORCH_ONNX_USE_DYNAMO_EXPORT", "0")
+
+    vits.eval()
+    vits.to("cpu")
+
+    orig_export = torch.onnx.export
+    try:
+        try:
+            sig = inspect.signature(torch.onnx.export)
+            supports_dynamo_flag = "dynamo" in sig.parameters
+        except Exception:
+            supports_dynamo_flag = False
+
+        if supports_dynamo_flag:
+            # Force legacy exporter by default for any internal calls.
+            def export_no_dynamo(*args: Any, **kwargs: Any) -> Any:
+                kwargs.setdefault("dynamo", False)
+                return orig_export(*args, **kwargs)
+
+            torch.onnx.export = export_no_dynamo  # type: ignore[assignment]
+
+        vits.export_onnx(output_path=str(onnx_path), verbose=False)
+    finally:
+        torch.onnx.export = orig_export  # type: ignore[assignment]
 
     language = LANG_MAP.get(args.language, args.language)
     meta_data: Dict[str, Any] = {
@@ -130,4 +182,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
