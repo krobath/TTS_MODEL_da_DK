@@ -39,5 +39,25 @@ python "${ROOT_DIR}/scripts/generate_coqui_vits_config_ws_pua.py" \
   --max-text-len "${WS_MAX_TEXT_LEN:-120}" \
   ${WS_DISABLE_EVAL:+--disable-eval}
 
+echo "== (3.1) Patch config to include full G2P PUA alphabet =="
+python "${ROOT_DIR}/scripts/patch_coqui_config_add_required_pua.py" \
+  --config "${OUT_DIR}/config.json" \
+  --g2p-dir "${ROOT_DIR}/g2p-models/da-DK" \
+  --pua-base 0xE000
+
+echo "== (3.2) Verify WS-PUA compatibility (dataset + config) =="
+python "${ROOT_DIR}/scripts/verify_ws_pua_pipeline.py" \
+  --g2p-dir "${ROOT_DIR}/g2p-models/da-DK" \
+  --pua-base 0xE000 \
+  --dataset "${DATASET_DIR}" \
+  --config "${OUT_DIR}/config.json"
+
+echo "== (3.3) Verify WS-PUA config is compatible with G2P vocab (strict) =="
+python "${ROOT_DIR}/scripts/verify_ws_pua_pipeline.py" \
+  --g2p-dir "${ROOT_DIR}/g2p-models/da-DK" \
+  --pua-base 0xE000 \
+  --config "${OUT_DIR}/config.json" \
+  --strict
+
 echo "== (4) Train =="
 WS_TTS_DIAG=1 "${ROOT_DIR}/scripts/train_da_coral_ws_pua_vits.sh" "${OUT_DIR}/config.json" --use_accelerate true
