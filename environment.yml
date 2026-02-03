@@ -18,3 +18,5 @@ dependencies:
       - onnx
       - onnxscript
       - onnxruntime
+      # Parity check (ONNX vs CoreML)
+      - coremltools

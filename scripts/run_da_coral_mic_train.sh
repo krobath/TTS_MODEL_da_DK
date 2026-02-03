@@ -59,11 +59,16 @@ python "${ROOT_DIR}/scripts/verify_ws_pua_pipeline.py" \
   --config "${OUT_DIR}/config.json" \
   --strict
 
-echo "== (3.4) Compare G2P ONNX vs CoreML outputs (best-effort) =="
-python "${ROOT_DIR}/scripts/compare_g2p_onnx_coreml.py" \
-  --g2p-dir "${ROOT_DIR}/g2p-models/da-DK" \
-  --pua-base 0xE000 \
-  --words "hej,ikke,kampagne,kampagnen,tømrer,chef,schæfer,løber" || true
+if [[ "${WS_SKIP_G2P_PARITY:-0}" == "1" ]]; then
+  echo "== (3.4) Compare G2P ONNX vs CoreML outputs: SKIPPED (WS_SKIP_G2P_PARITY=1) =="
+else
+  echo "== (3.4) Compare G2P ONNX vs CoreML outputs (strict) =="
+  python "${ROOT_DIR}/scripts/compare_g2p_onnx_coreml.py" \
+    --g2p-dir "${ROOT_DIR}/g2p-models/da-DK" \
+    --pua-base 0xE000 \
+    --words "hej,ikke,kampagne,kampagnen,tømrer,chef,schæfer,løber" \
+    --strict
+fi
 
 echo "== (4) Train =="
 WS_TTS_DIAG=1 "${ROOT_DIR}/scripts/train_da_coral_ws_pua_vits.sh" "${OUT_DIR}/config.json" --use_accelerate true

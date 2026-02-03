@@ -116,7 +116,17 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--g2p-dir", required=True, help="Directory containing vocab.json + da_ctc.onnx + da_ctc.mlpackage")
     ap.add_argument("--pua-base", type=lambda s: int(s, 0), default=0xE000)
-    ap.add_argument("--words", default="hej,ikke,kampagne,kampagnen,tømrer,chef,schæfer,løber", help="Comma-separated")
+    ap.add_argument(
+        "--words",
+        default="hej,ikke,kampagne,kampagnen,tømrer,chef,schæfer,løber",
+        help="Comma-separated list (ignored if --words-file is provided)",
+    )
+    ap.add_argument(
+        "--words-file",
+        default="",
+        help="Path to newline-separated wordlist (lines starting with # are ignored)",
+    )
+    ap.add_argument("--limit", type=int, default=0, help="Limit number of words read from --words-file")
     ap.add_argument("--strict", action="store_true", help="Exit non-zero if any mismatch is found")
     args = ap.parse_args()
 
@@ -137,9 +147,24 @@ def main() -> None:
     blank_id = int(vocab["blank_id"])
     max_len = int(vocab["max_word_len"])
 
-    words = [w.strip() for w in str(args.words).split(",") if w.strip()]
-    if not words:
-        raise SystemExit("--words produced no words")
+    if args.words_file:
+        words_path = Path(args.words_file).expanduser().resolve()
+        if not words_path.exists():
+            raise SystemExit(f"--words-file not found: {words_path}")
+        words: List[str] = []
+        for line in words_path.read_text(encoding="utf-8").splitlines():
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            words.append(s)
+            if args.limit and len(words) >= int(args.limit):
+                break
+        if not words:
+            raise SystemExit(f"--words-file produced no words: {words_path}")
+    else:
+        words = [w.strip() for w in str(args.words).split(",") if w.strip()]
+        if not words:
+            raise SystemExit("--words produced no words")
 
     print("== G2P Parity Check (ONNX vs CoreML) ==")
     print(f"g2p_dir={g2p_dir}")
@@ -147,6 +172,8 @@ def main() -> None:
     print(f"onnx={onnx_path}")
     print(f"coreml={mlpackage_path}")
     print(f"puaBase=0x{int(args.pua_base):X}")
+    if args.words_file:
+        print(f"words_file={Path(args.words_file).expanduser().resolve()} limit={int(args.limit)}")
     print("")
 
     mismatches: List[Tuple[str, List[int], List[int]]] = []
@@ -198,4 +225,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

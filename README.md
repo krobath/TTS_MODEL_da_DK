@@ -36,6 +36,18 @@ It intentionally does **not** contain:
 If you want a single “do the standard thing” command (downloads CoRal on first run), use:
 - `scripts/run_da_coral_mic_train.sh`
 
+### Important: WS‑PUA “fail early” checks
+
+WS‑PUA voices are conditioned on the *exact* phoneme-token-id sequences produced by our G2P model.
+If the G2P outputs used during dataset generation (ONNX) differ from the G2P outputs used at runtime
+in the app (CoreML), the trained voice will usually sound like “gibberish”.
+
+To catch this before wasting days training, `scripts/run_da_coral_mic_train.sh` runs:
+- `scripts/compare_g2p_onnx_coreml.py ... --strict` and will fail if any mismatch is detected.
+
+If you explicitly want to bypass this check (not recommended), run with:
+- `WS_SKIP_G2P_PARITY=1 scripts/run_da_coral_mic_train.sh`
+
 ## Why we disable language embeddings
 
 This project trains a **single-language** Danish model. Coqui configs often enable language embeddings,
