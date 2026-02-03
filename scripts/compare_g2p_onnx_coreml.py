@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import unicodedata
+import hashlib
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -96,6 +97,34 @@ def run_onnx(onnx_path: Path, input_ids: np.ndarray) -> np.ndarray:
     return sess.run([output_name], {input_name: input_ids})[0]
 
 
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def sha256_tree(root: Path) -> str:
+    """
+    Deterministic recursive hash of a directory tree:
+    hash over (relative_path, size, sha256(file_contents)) for each file.
+
+    Intended to quickly confirm two machines are testing the same `.mlpackage`.
+    """
+    root = root.resolve()
+    h = hashlib.sha256()
+    files = sorted([p for p in root.rglob("*") if p.is_file()], key=lambda p: str(p.relative_to(root)))
+    for p in files:
+        rel = str(p.relative_to(root))
+        size = p.stat().st_size
+        fh = sha256_file(p)
+        h.update(rel.encode("utf-8") + b"\0")
+        h.update(str(size).encode("utf-8") + b"\0")
+        h.update(fh.encode("utf-8") + b"\0")
+    return h.hexdigest()
+
+
 def run_coreml(mlpackage_path: Path, input_ids: np.ndarray) -> np.ndarray:
     try:
         import coremltools as ct
@@ -127,6 +156,15 @@ def main() -> None:
         help="Path to newline-separated wordlist (lines starting with # are ignored)",
     )
     ap.add_argument("--limit", type=int, default=0, help="Limit number of words read from --words-file")
+    ap.add_argument(
+        "--coreml-compute-units",
+        default="cpu-only",
+        choices=["cpu-only", "cpu-and-gpu", "cpu-and-ne", "all"],
+        help=(
+            "CoreML compute units to use for inference. "
+            "Use cpu-only for deterministic parity checks across machines."
+        ),
+    )
     ap.add_argument("--strict", action="store_true", help="Exit non-zero if any mismatch is found")
     args = ap.parse_args()
 
@@ -168,15 +206,32 @@ def main() -> None:
 
     print("== G2P Parity Check (ONNX vs CoreML) ==")
     print(f"g2p_dir={g2p_dir}")
-    print(f"vocab={vocab_path} tokens={len(vocab['tokens'])} blank_id={blank_id} max_word_len={max_len}")
-    print(f"onnx={onnx_path}")
-    print(f"coreml={mlpackage_path}")
+    print(
+        f"vocab={vocab_path} sha256={sha256_file(vocab_path)} tokens={len(vocab['tokens'])} blank_id={blank_id} max_word_len={max_len}"
+    )
+    print(f"onnx={onnx_path} sha256={sha256_file(onnx_path)}")
+    print(f"coreml={mlpackage_path} tree_sha256={sha256_tree(mlpackage_path)}")
     print(f"puaBase=0x{int(args.pua_base):X}")
+    print(f"coreml_compute_units={args.coreml_compute_units}")
     if args.words_file:
         print(f"words_file={Path(args.words_file).expanduser().resolve()} limit={int(args.limit)}")
     print("")
 
     mismatches: List[Tuple[str, List[int], List[int]]] = []
+
+    # Load CoreML model once (faster + consistent compute units selection).
+    try:
+        import coremltools as ct
+    except Exception as e:  # pragma: no cover
+        raise SystemExit("Missing dependency: coremltools. Install with: python -m pip install coremltools") from e
+
+    cu_map = {
+        "cpu-only": ct.ComputeUnit.CPU_ONLY,
+        "cpu-and-gpu": ct.ComputeUnit.CPU_AND_GPU,
+        "cpu-and-ne": ct.ComputeUnit.CPU_AND_NE,
+        "all": ct.ComputeUnit.ALL,
+    }
+    coreml_model = ct.models.MLModel(str(mlpackage_path), compute_units=cu_map[str(args.coreml_compute_units)])
 
     for w in words:
         ids = encode_word(w, chars=chars, max_len=max_len)
@@ -188,7 +243,13 @@ def main() -> None:
         x_coreml = np.array(ids, dtype=np.int32).reshape(1, max_len)
 
         onnx_logits = run_onnx(onnx_path, x_onnx)
-        coreml_logits = run_coreml(mlpackage_path, x_coreml)
+        out = coreml_model.predict({"input_ids": x_coreml})
+        if not out:
+            raise SystemExit(f"CoreML returned no outputs for: {mlpackage_path}")
+        if "logits" in out:
+            coreml_logits = out["logits"]
+        else:
+            coreml_logits = out[sorted(out.keys())[0]]
 
         onnx_out = ctc_greedy_decode(onnx_logits, blank_id=blank_id)
         coreml_out = ctc_greedy_decode(coreml_logits, blank_id=blank_id)

@@ -67,6 +67,7 @@ else
     --g2p-dir "${ROOT_DIR}/g2p-models/da-DK" \
     --pua-base 0xE000 \
     --words "hej,ikke,kampagne,kampagnen,tømrer,chef,schæfer,løber" \
+    --coreml-compute-units cpu-only \
     --strict
 fi
 

@@ -96,6 +96,11 @@ If this fails:
 - Do **not** start training a WS‑PUA voice pack.
 - The training pipeline must be aligned so the same G2P outputs are used in both training and the app.
 
+Note:
+- The parity tool runs CoreML inference with `cpu-only` compute units by default to make results
+  deterministic across machines. The WordSuggestor app also forces `MLModelConfiguration.computeUnits = .cpuOnly`
+  for G2P for the same reason.
+
 ## G2P model health checks (before training any WS‑PUA voice)
 
 WS‑PUA voice training only works if the Danish neural G2P model is “healthy” and **consistent across runtimes**.
