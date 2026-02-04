@@ -3,6 +3,13 @@
 This folder is designed to be copied into its own Git repository, so you can clone it to another Mac
 (e.g. your Mac Studio) and run voice training there while continuing app development on your laptop.
 
+## Status (current direction)
+
+WordSuggestor should currently rely on **built-in platform TTS/STT** (system voices + platform Speech APIs),
+and use WS‑PUA training as **experimental R&D** until:
+- G2P determinism is guaranteed (training backend == runtime backend), and
+- voice quality is validated against real Danish text.
+
 It contains:
 - Dataset preparation (CoRal-TTS → WS “PUA phonemes” dataset)
 - Coqui VITS config generation

@@ -9,6 +9,11 @@ It is written so you can:
 
 Repository root for this work: `TTS_MODEL_da_DK/`
 
+## Current status / direction
+
+As of now, WordSuggestor should use **built-in platform TTS/STT** (system voices + platform Speech APIs) for the shipped product.
+This WS‑PUA training work remains useful as experimental R&D for consistent cross-platform offline voices, but it is not the default path.
+
 ---
 
 ## 1) Background, Research, and Decisions

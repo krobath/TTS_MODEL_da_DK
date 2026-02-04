@@ -2,6 +2,20 @@
 
 This document is the canonical, continuously updated reference for **how we train and verify** our Danish text-to-speech (TTS) voice using the **WS‑PUA phoneme frontend**.
 
+## Current product direction (recommended)
+
+For now, WordSuggestor should use **built-in platform TTS/STT**:
+
+- **TTS:** `AVSpeechSynthesizer` (macOS/iOS/iPadOS) with user-installed “Enhanced/Forbedret” voices.
+- **STT:** platform Speech APIs (Apple Speech framework on Apple platforms; Windows/ChromeOS later).
+
+Why:
+- Highest quality with lowest app complexity today (no model downloads/runtimes).
+- Licensing is simple and commercial-friendly.
+
+WS‑PUA training remains valuable R&D for consistent cross-platform offline voices, but it is currently **experimental**
+and should not be the default shipped path until G2P determinism and voice quality are validated.
+
 ## What we are building
 
 We train a Danish VITS voice model (Coqui TTS) on **CoRal‑TTS (CC0)**. The key design is:
@@ -19,6 +33,21 @@ WS‑PUA voice conditioning depends on the **exact** token-id sequence produced 
 If the G2P output used during dataset preparation (currently **ONNXRuntime**) differs from what the app uses at runtime (currently **CoreML**), the voice will typically sound like **unrecognizable gibberish**, even if training “succeeds”.
 
 Therefore, we must run an **ONNX vs CoreML G2P parity check** before multi‑day training runs.
+
+## System voices (Enhanced) — user instructions
+
+We cannot programmatically download Apple “Enhanced/Forbedret” voices. Users must install them in system settings.
+
+macOS (Danish UI varies slightly by version):
+- Systemindstillinger → Tilgængelighed → Oplæst indhold
+- Vælg en **systemstemme** → Administrer stemmer…
+- Installer “Dansk” (forbedret) / “Enhanced”
+
+In-app:
+- Settings → `Lydindstillinger`
+- Choose `Oplæsningsmotor = System`
+- Use the “Åbn systemindstillinger for oplæsning…” button (best-effort deep link)
+- Optionally disable “Brug systemets oplæsningsindstillinger” and pick a specific installed voice.
 
 ## Repo locations
 
@@ -100,6 +129,17 @@ Note:
 - The parity tool runs CoreML inference with `cpu-only` compute units by default to make results
   deterministic across machines. The WordSuggestor app also forces `MLModelConfiguration.computeUnits = .cpuOnly`
   for G2P for the same reason.
+
+If you see different mismatch sets on different Apple machines even when:
+- `vocab.json sha256`, `da_ctc.onnx sha256`, and `da_ctc.mlpackage tree_sha256` are identical, and
+- CoreML is forced to `cpu-only`,
+
+then CoreML inference is still producing numerically different logits across devices/OS versions (enough to flip CTC decoding).
+That is a **hard blocker** for WS‑PUA portability if the app relies on CoreML G2P.
+
+In that situation, the recommended path is to pick a **single portable G2P backend** used everywhere:
+- Prefer ONNXRuntime for G2P on all platforms (macOS/iPadOS/Windows/ChromeOS), so training + app share the same backend.
+- Or avoid neural G2P for WS‑PUA entirely by using a deterministic pronunciation lexicon (where coverage permits).
 
 ## G2P model health checks (before training any WS‑PUA voice)
 
